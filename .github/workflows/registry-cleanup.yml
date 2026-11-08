@@ -1,0 +1,37 @@
+# Reusable: prunes the repository's GHCR package (named after the repository). Every main push publishes a
+# sha-<short> tag and an attestation, so they pile up. Keeps the 10 newest sha-* (the rest go once older than
+# 30 days), never touches latest, edge or a version tag, deletes untagged layers, and keeps the attestations of
+# the images it keeps.
+#
+# Retention contract: sha-* tags are ephemeral. Anything that must keep pulling pins :latest, a version tag or a
+# digest, never an old sha-* tag. The caller grants packages write.
+name: Registry cleanup
+
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        description: Log what would be deleted, delete nothing.
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - id: repo
+        run: echo "name=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+      - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1
+        with:
+          package: ${{ steps.repo.outputs.name }}
+          delete-tags: sha-*
+          keep-n-tagged: 10
+          exclude-tags: latest,edge
+          delete-untagged: true
+          older-than: 30 days
+          dry-run: ${{ inputs.dry-run }}
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,60 @@
+# Shared Release Drafter configuration: release notes (draft-release) and PR labels (autolabeler) for every
+# repository of the organisation that has no .github/release-drafter.yml of its own (Release Drafter falls back
+# to this file). Labels come from the Conventional Commit type of the PR title; the version from the labels.
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+change-template: '- $TITLE (#$NUMBER)'
+change-title-escapes: '\<*_&'
+
+# The autolabeler also removes the labels it manages when a title changes (feat -> fix). Labels set by others and
+# not listed below (Renovate's `security` and `github-actions`, a label set by hand) are left alone.
+sync-labels: true
+autolabeler:
+  - labels: ['breaking']
+    title: ['/^[a-z]+(\([^)]*\))?!:/']
+  # Renovate's titles: `fix(deps):` for production dependencies, `chore(deps):` for the rest.
+  - labels: ['dependencies']
+    title: ['/^[a-z]+\(deps\)!?:/']
+    stop-on-match: true
+  - labels: ['feature']
+    title: ['/^feat(\([^)]*\))?!?:/']
+  - labels: ['enhancement']
+    title: ['/^perf(\([^)]*\))?!?:/']
+  - labels: ['fix']
+    title: ['/^(fix|revert)(\([^)]*\))?!?:/']
+  - labels: ['documentation']
+    title: ['/^docs(\([^)]*\))?!?:/']
+  - labels: ['chore']
+    title: ['/^(build|chore|ci|refactor|style|test)(\([^)]*\))?!?:/']
+
+categories:
+  - title: '⚠️ Breaking Changes'
+    labels: ['breaking']
+  - title: '🚀 Features'
+    labels: ['feature', 'enhancement']
+  - title: '🐛 Bug Fixes'
+    labels: ['fix']
+  - title: '🔒 Security'
+    labels: ['security']
+  - title: '📚 Documentation'
+    labels: ['documentation']
+  - title: '📦 Dependencies'
+    labels: ['dependencies']
+  - title: '🤖 GitHub Actions'
+    labels: ['github-actions']
+  - title: '🧹 Maintenance'
+    labels: ['chore']
+
+version-resolver:
+  major:
+    labels: ['breaking']
+  minor:
+    labels: ['feature', 'enhancement']
+  default: patch
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/$OWNER/$REPO/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

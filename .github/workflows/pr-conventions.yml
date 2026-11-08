@@ -1,0 +1,43 @@
+# Reusable: the PR title is a Conventional Commit (it becomes the squash commit, the label and the changelog
+# line), and the PR gets its label from that title. Called by every repository's pull-request.yml; the
+# `title` job is a required check (ruleset "Protect main").
+#
+# Types: the Conventional Commits set of commitlint's config-conventional. A breaking change adds `!`.
+# Labels: the autolabeler rules of .github/release-drafter.yml in this repository.
+name: PR conventions
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            build
+            chore
+            ci
+            docs
+            feat
+            fix
+            perf
+            refactor
+            revert
+            style
+            test
+
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: release-drafter/release-drafter/autolabeler@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
