@@ -32,7 +32,9 @@ is published.
 `.github/release-drafter.yml` is the Release Drafter configuration of every repository without its own: label
 rules from the Conventional Commit type, release note categories and version bump from the labels.
 
-A change here: PR, merge, then publish a release `vX.Y.Z` so callers get it through Renovate.
+A change to the community files or to `.github/release-drafter.yml` applies to every repository once merged. A change
+to a reusable workflow ships as a release `vX.Y.Z` (semver: an incompatible input change is a major), and Renovate
+opens one "shared workflows" PR per repository.
 
 ## Repository settings
 
