@@ -16,7 +16,7 @@
 
 ## Checklist
 
-- [ ] Title is a [Conventional Commit](https://www.conventionalcommits.org/) with a type from `.github/conventional-commit-types.json` (`feat: add X`, `fix(api): correct Y`, `feat!: drop Z`): it becomes the squash commit, the label and the changelog line
+- [ ] Title is a [Conventional Commit](https://www.conventionalcommits.org/): `type(scope): summary`, type among `build chore ci docs feat fix perf refactor revert style test`, `!` for a breaking change (`feat: add X`, `fix(api): correct Y`, `feat!: drop Z`): it becomes the squash commit, the label and the changelog line
 - [ ] Tests added or updated for new or changed behaviour
 - [ ] Local checks pass (the commands are in the repository's CONTRIBUTING.md or README)
 - [ ] Docs updated if behaviour or configuration changed

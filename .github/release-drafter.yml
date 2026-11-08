@@ -1,4 +1,4 @@
-# Shared Release Drafter configuration: release notes (draft-release) and PR labels (autolabeler) for every
+# Shared Release Drafter configuration: release notes (drafter) and PR labels (autolabeler) for every
 # repository of the organisation that has no .github/release-drafter.yml of its own (Release Drafter falls back
 # to this file). Labels come from the Conventional Commit type of the PR title; the version from the labels.
 name-template: 'v$RESOLVED_VERSION'
