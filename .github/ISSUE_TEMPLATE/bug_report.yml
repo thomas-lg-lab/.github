@@ -1,0 +1,49 @@
+name: Bug report
+description: Something does not work as documented.
+type: Bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security issue? Do not open a public issue: report it privately (Security tab, Report a vulnerability; see SECURITY.md).
+        Redact API keys, tokens, passwords, webhook URLs, hostnames and IP addresses from everything below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release, image tag or commit (`v1.2.3`, `latest`, `edge`, `sha-abc1234`).
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: How it runs (Docker Compose, Kubernetes, bare metal...), OS and architecture, anything non-default.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The relevant lines only, redacted. Rendered as a code block.
+      render: text
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, configuration excerpts (redacted), when it started.

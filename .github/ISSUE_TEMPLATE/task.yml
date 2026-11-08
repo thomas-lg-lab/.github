@@ -1,0 +1,31 @@
+name: Task
+description: Planned work with a clear end (maintenance, refactor, chore, follow-up).
+type: Task
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What this changes and why now.
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: Checkable outcomes, one per line. The PR that closes this issue meets all of them.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What this task deliberately leaves alone.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Pointers, constraints, related issues or PRs.
