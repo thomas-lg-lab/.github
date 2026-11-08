@@ -1,0 +1,5 @@
+# Every issue goes through a form: a blank issue rarely carries the version and the steps needed to act on it.
+# Required fields are enforced in public repositories only; people with write access keep a blank option.
+# No contact link: these defaults serve every repository of the organisation, and GitHub links the
+# private reporting channel from the issue chooser (SECURITY.md).
+blank_issues_enabled: false
