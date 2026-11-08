@@ -1,0 +1,54 @@
+# Reusable: keeps a draft GitHub Release up to date from the merged PRs (categories and version from their labels,
+# .github/release-drafter.yml in this repository), and publishes it on demand. Publishing creates the `v*` tag;
+# that tag is pushed with GITHUB_TOKEN, which starts no workflow, so the image workflow is dispatched on it.
+# Called by the release-drafter.yml workflow of every repository that ships releases.
+name: Release Drafter
+
+on:
+  workflow_call:
+    inputs:
+      publish:
+        description: Publish the draft (creates the tag) instead of refreshing it.
+        type: boolean
+        default: false
+      dry-run:
+        description: With publish, log what would be published and change nothing.
+        type: boolean
+        default: false
+      image-workflow:
+        description: Workflow file to dispatch on the new tag (the one building the release image); empty for none.
+        type: string
+        default: ""
+
+permissions: {}
+
+jobs:
+  draft:
+    if: ${{ !inputs.publish }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create and update the draft release
+      pull-requests: read
+    steps:
+      - uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
+
+  publish:
+    if: ${{ inputs.publish && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # publish the release, which creates its tag
+      pull-requests: read
+      actions: write # dispatch the image workflow on that tag
+    steps:
+      - id: drafter
+        uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
+        with:
+          publish: true
+          dry-run: ${{ inputs.dry-run }}
+      - name: Build the release image
+        if: ${{ !inputs.dry-run && inputs.image-workflow != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW: ${{ inputs.image-workflow }}
+          TAG: ${{ steps.drafter.outputs.tag_name }}
+        run: gh workflow run "$WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref "$TAG"
