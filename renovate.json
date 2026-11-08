@@ -1,0 +1,6 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Keeps the actions of the shared workflows current through the organisation's preset. No auto-merge: a change here reaches every repository at its next release.",
+  "extends": ["github>thomas-lg-lab/renovate-config"],
+  "enabledManagers": ["github-actions"]
+}

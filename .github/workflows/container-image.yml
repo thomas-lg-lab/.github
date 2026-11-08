@@ -40,17 +40,28 @@ env:
 jobs:
   # The gate every event runs: build amd64, load it, report CRITICAL and HIGH to the Security tab, fail on a fixable
   # CRITICAL only (HIGHs churn with the vulnerability database and would wedge releases on base-image findings).
+  # Without a Dockerfile (a template, a repository that ships no image) every step is skipped and the check passes.
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
+    outputs:
+      dockerfile: ${{ steps.detect.outputs.dockerfile }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - id: detect
+        env:
+          DOCKERFILE: ${{ inputs.context }}/${{ inputs.file }}
+        run: |
+          if [ -f "$DOCKERFILE" ]; then echo "dockerfile=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::No $DOCKERFILE, nothing to build."; echo "dockerfile=false" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.detect.outputs.dockerfile == 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - id: meta
+        if: steps.detect.outputs.dockerfile == 'true'
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.IMAGE }}
@@ -61,6 +72,7 @@ jobs:
             type=sha,prefix=sha-,format=short
       # amd64 only: `load` takes one platform, and both architectures install the same packages.
       - name: Build (no push)
+        if: steps.detect.outputs.dockerfile == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ${{ inputs.context }}
@@ -74,6 +86,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Vulnerability report (Trivy)
+        if: steps.detect.outputs.dockerfile == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE }}:${{ steps.meta.outputs.version }}
@@ -83,12 +96,13 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
       - name: Upload the report to code scanning
-        if: always()
+        if: always() && steps.detect.outputs.dockerfile == 'true'
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: trivy-results.sarif
           category: trivy-image
       - name: Vulnerability gate (Trivy)
+        if: steps.detect.outputs.dockerfile == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE }}:${{ steps.meta.outputs.version }}
@@ -98,6 +112,7 @@ jobs:
           severity: CRITICAL
           ignore-unfixed: true
 
+  # In parallel with `build`, so it detects the Dockerfile itself.
   build-arm64:
     if: ${{ inputs.verify-arm64 && github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04-arm
@@ -107,8 +122,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - id: detect
+        env:
+          DOCKERFILE: ${{ inputs.context }}/${{ inputs.file }}
+        run: echo "dockerfile=$([ -f "$DOCKERFILE" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - if: steps.detect.outputs.dockerfile == 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build arm64 (no push)
+        if: steps.detect.outputs.dockerfile == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ${{ inputs.context }}
@@ -123,7 +144,7 @@ jobs:
   # id-token and attestations write.
   publish:
     needs: build
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ github.event_name != 'pull_request' && needs.build.outputs.dockerfile == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
