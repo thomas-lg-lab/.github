@@ -46,6 +46,10 @@
           {
             "context": "conventions / title",
             "integration_id": 15368
+          },
+          {
+            "context": "conventions / lint",
+            "integration_id": 15368
           }
         ]
       }
