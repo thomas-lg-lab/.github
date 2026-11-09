@@ -13,4 +13,5 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      security-events: write # zizmor's SARIF upload
     uses: $/.github/workflows/pr-conventions.yml
