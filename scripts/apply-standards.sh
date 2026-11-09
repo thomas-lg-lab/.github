@@ -37,7 +37,8 @@ gh api -X PUT "repos/$REPO/vulnerability-alerts" >/dev/null
 
 # GitHub-managed CodeQL: languages detected by GitHub, analysis on every PR and push to main, no workflow file.
 echo "Security: CodeQL default setup"
-gh api -X PATCH "repos/$REPO/code-scanning/default-setup" -f state=configured -f query_suite=default >/dev/null
+gh api -X PATCH "repos/$REPO/code-scanning/default-setup" -f state=configured -f query_suite=default >/dev/null \
+    || echo "WARNING: CodeQL default setup refused (no supported language yet?); the ruleset's code_scanning rule blocks merges until it is on" >&2
 
 # The labels the autolabeler and Renovate set, and release-drafter reads (.github/release-drafter.yml of the
 # organisation's .github repository). Existing labels are updated, others are left alone.

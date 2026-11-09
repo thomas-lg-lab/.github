@@ -1,7 +1,7 @@
 # Reusable: prunes the repository's GHCR package (named after the repository). Every main push publishes a
-# sha-<short> tag and an attestation, so they pile up. Keeps the 10 newest sha-* (the rest go once older than
-# 30 days), never touches latest, edge or a version tag, deletes untagged layers, and keeps the attestations of
-# the images it keeps.
+# sha-<short> tag and an attestation, so they pile up. sha-* younger than 30 days are kept, and the 10 newest
+# older ones; latest, edge and version tags are never touched; untagged layers go; the attestations of the images
+# kept stay.
 #
 # Retention contract: sha-* tags are ephemeral. Anything that must keep pulling pins :latest, a version tag or a
 # digest, never an old sha-* tag. The caller grants packages write.

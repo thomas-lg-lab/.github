@@ -34,7 +34,9 @@ jobs:
             style
             test
 
+  # A PR from a fork gets a read-only token: no label there (the title check still runs).
   label:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

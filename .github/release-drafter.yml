@@ -12,7 +12,8 @@ sync-labels: true
 autolabeler:
   - labels: ['breaking']
     title: ['/^[a-z]+(\([^)]*\))?!:/']
-  # Renovate's titles: `fix(deps):` for production dependencies, `chore(deps):` for the rest.
+  # Renovate's titles: `fix(deps):` for production dependencies, `chore(deps):` for the rest (the preset of
+  # renovate-config keeps Renovate's default scope; sync-labels would strip `dependencies` from a title without it).
   - labels: ['dependencies']
     title: ['/^[a-z]+\(deps\)!?:/']
     stop-on-match: true
@@ -57,4 +58,4 @@ template: |
 
   $CHANGES
 
-  **Full Changelog**: https://github.com/$OWNER/$REPO/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
