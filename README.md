@@ -25,7 +25,7 @@ is published.
 | Workflow | Does | Called by |
 | --- | --- | --- |
 | `pr-conventions.yml` | PR title is a Conventional Commit (`amannn/action-semantic-pull-request`, commitlint types), label from the title (Release Drafter's autolabeler), lint of the repository's workflows: zizmor (findings in the Security tab, merge gated by the ruleset's code scanning rule) and actionlint (annotations, blocking). The `title` and `lint` jobs are required checks. | every repository's `pull-request.yml` |
-| `release-drafter.yml` | Draft release from the merged PRs; on demand, publish it and dispatch the image build on the new tag. | `release-drafter.yml` of repositories that ship releases |
+| `release-drafter.yml` | Draft release from the merged PRs; on demand, publish it as the organisation's release App (`thomas-lg-release`), whose tag push starts the repository's `ci.yml`. Callers pass `secrets: inherit` (organisation secrets `RELEASE_APP_CLIENT_ID`, `RELEASE_APP_PRIVATE_KEY`). | `release-drafter.yml` of repositories that ship releases |
 | `container-image.yml` | Docker image: build and Trivy gate on every PR, publish `edge` and `sha-*` from main, `X.Y.Z` / `latest` from a release tag, build provenance attestation. | the last job of a repository's `ci.yml`, after its tests |
 | `registry-cleanup.yml` | Weekly GHCR pruning of `sha-*` tags and untagged layers. | `registry-cleanup.yml` of repositories that publish an image |
 
@@ -40,7 +40,8 @@ opens one "shared workflows" PR per repository.
 
 `scripts/apply-standards.sh owner/repo`, run from the root of the repository's clone, applies what no file can
 carry: merge settings, secret scanning and push protection, private vulnerability reporting, Dependabot alerts,
-CodeQL default setup, the label set, and the repository's rulesets (`.github/rulesets/*.json`).
+CodeQL default setup, immutable releases, the label set, and the repository's rulesets (`.github/rulesets/*.json`:
+`Protect main`, `Code owner review`, `Release tags`, the last one letting only the release App create a `v*` tag).
 
 Each repository keeps `LICENSE`, `CODEOWNERS`, `.editorconfig`, `.gitattributes`, `renovate.json` (on top of the
 shared preset of `thomas-lg-lab/renovate-config`), its rulesets, a copy of `scorecard.yml` (Scorecard publishing

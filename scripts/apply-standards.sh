@@ -1,7 +1,7 @@
 #!/bin/sh
 # Applies the organisation's repository standards that no file can carry: merge settings, security features,
-# CodeQL default setup, the label set, and the repository's rulesets (.github/rulesets/*.json of the clone it
-# runs from). Idempotent: run it after creating a repository, and again after editing a ruleset file.
+# CodeQL default setup, immutable releases, the label set, and the repository's rulesets (.github/rulesets/*.json
+# of the clone it runs from: Protect main, Code owner review, Release tags). Idempotent: run it after creating a repository, and again after editing a ruleset file.
 #
 # Usage, from the root of the repository's clone:
 #   ../.github/scripts/apply-standards.sh thomas-lg-lab/<name>
@@ -34,6 +34,12 @@ gh api -X PUT "repos/$REPO/private-vulnerability-reporting" >/dev/null
 # Alerts only: Dependabot opens no PR, Renovate does. The alerts feed Renovate and the Security tab.
 echo "Security: Dependabot alerts"
 gh api -X PUT "repos/$REPO/vulnerability-alerts" >/dev/null
+
+# A published release and its tag can no longer be changed or deleted (drafts stay editable). With the "Release
+# tags" ruleset, a release tag is created by the release App alone and then stays what it was.
+echo "Releases: immutable"
+gh api -X PUT "repos/$REPO/immutable-releases" >/dev/null \
+    || echo "WARNING: immutable releases could not be enabled" >&2
 
 # GitHub-managed CodeQL: languages detected by GitHub, analysis on every PR and push to main, no workflow file.
 echo "Security: CodeQL default setup"

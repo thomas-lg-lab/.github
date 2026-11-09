@@ -1,7 +1,10 @@
 # Reusable: keeps a draft GitHub Release up to date from the merged PRs (categories and version from their labels,
-# .github/release-drafter.yml in this repository), and publishes it on demand. Publishing creates the `v*` tag;
-# that tag is pushed with GITHUB_TOKEN, which starts no workflow, so the image workflow is dispatched on it.
-# Called by the release-drafter.yml workflow of every repository that ships releases.
+# .github/release-drafter.yml in this repository), and publishes it on demand. Publishing creates the `v*` tag as
+# the organisation's release App (`thomas-lg-release`, Contents write only): the only actor the "Release tags"
+# ruleset lets create such a tag, and a tag it pushes starts the repository's workflows (a GITHUB_TOKEN tag would
+# not), so `ci.yml` builds the release image on its own `push: tags` trigger.
+# Called by the release-drafter.yml workflow of every repository that ships releases, with `secrets: inherit` (the
+# organisation secrets RELEASE_APP_CLIENT_ID and RELEASE_APP_PRIVATE_KEY).
 name: Release Drafter
 
 on:
@@ -15,10 +18,6 @@ on:
         description: With publish, log what would be published and change nothing.
         type: boolean
         default: false
-      image-workflow:
-        description: Workflow file to dispatch on the new tag (the one building the release image); empty for none.
-        type: string
-        default: ""
 
 permissions: {}
 
@@ -40,24 +39,26 @@ jobs:
     if: ${{ inputs.publish }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write # publish the release, which creates its tag
+      contents: read
       pull-requests: read
-      actions: write # dispatch the image workflow on that tag
     steps:
       - name: Only main is released
         if: ${{ github.ref != 'refs/heads/main' }}
         run: |
           echo "::error::A release is published from main, not from $GITHUB_REF_NAME."
           exit 1
-      - id: drafter
-        uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
+      # The release App's token, scoped to this repository and to Contents write: it publishes the release and
+      # creates the tag (the ruleset's bypass actor), and that tag starts ci.yml.
+      - id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+      - uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
         with:
           publish: true
           dry-run: ${{ inputs.dry-run }}
-      - name: Build the release image
-        if: ${{ !inputs.dry-run && inputs.image-workflow != '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          WORKFLOW: ${{ inputs.image-workflow }}
-          TAG: ${{ steps.drafter.outputs.tag_name }}
-        run: gh workflow run "$WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref "$TAG"
+          token: ${{ steps.app-token.outputs.token }}
