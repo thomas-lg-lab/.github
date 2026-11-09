@@ -58,7 +58,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+      # zizmor's SARIF goes to code scanning on the PR's HEAD commit (ref refs/pull/N/head, like CodeQL default
+      # setup), not on the test-merge commit a pull_request run checks out: the rulesets' code_scanning rule looks
+      # for results on the head or the *current* merge commit, and the merge commit changes, so an upload on it
+      # left every PR "waiting for results from zizmor". Official image, pinned by digest; any exit code with a
+      # SARIF written is a result (zizmor exits non-zero when it finds something).
+      - name: zizmor
+        run: |
+          docker run --rm -v "$PWD:/repo"             ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d             --no-progress --no-online-audits --format sarif /repo > zizmor.sarif || true
+          python3 -c 'import json,sys; json.load(open("zizmor.sarif"))' || { echo "::error::zizmor produced no SARIF"; exit 1; }
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: zizmor.sarif
+          category: zizmor
+          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
+          sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       # Errors become annotations through actionlint's official problem matcher (its repository's
       # .github/actionlint-matcher.json at v1.7.12, embedded: the checkout is the caller's). The one ignore:
       # `$/` is GitHub's recommended same-repository syntax, which actionlint 1.7.12 does not parse yet.
