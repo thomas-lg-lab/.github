@@ -3,7 +3,7 @@
 # the organisation's release App (`thomas-lg-release`, Contents write only): the only actor the "Release tags"
 # ruleset lets create such a tag, and a tag it pushes starts the repository's workflows (a GITHUB_TOKEN tag would
 # not), so `ci.yml` builds the release image on its own `push: tags` trigger.
-# Called by the release-drafter.yml workflow of every repository that ships releases, with `secrets: inherit` (the
+# Called by the release-drafter.yml workflow of every repository that ships releases with `secrets: inherit` (the
 # organisation secrets RELEASE_APP_CLIENT_ID and RELEASE_APP_PRIVATE_KEY).
 name: Release Drafter
 
