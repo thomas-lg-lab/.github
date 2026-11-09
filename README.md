@@ -24,7 +24,7 @@ is published.
 
 | Workflow | Does | Called by |
 | --- | --- | --- |
-| `pr-conventions.yml` | PR title is a Conventional Commit (`amannn/action-semantic-pull-request`, commitlint types), label from the title (Release Drafter's autolabeler), lint of the repository's workflows (zizmor, actionlint). The `title` and `lint` jobs are required checks. | every repository's `pull-request.yml` |
+| `pr-conventions.yml` | PR title is a Conventional Commit (`amannn/action-semantic-pull-request`, commitlint types), label from the title (Release Drafter's autolabeler), lint of the repository's workflows: zizmor (findings in the Security tab, merge gated by the ruleset's code scanning rule) and actionlint (annotations, blocking). The `title` and `lint` jobs are required checks. | every repository's `pull-request.yml` |
 | `release-drafter.yml` | Draft release from the merged PRs; on demand, publish it and dispatch the image build on the new tag. | `release-drafter.yml` of repositories that ship releases |
 | `container-image.yml` | Docker image: build and Trivy gate on every PR, publish `edge` and `sha-*` from main, `X.Y.Z` / `latest` from a release tag, build provenance attestation. | the last job of a repository's `ci.yml`, after its tests |
 | `registry-cleanup.yml` | Weekly GHCR pruning of `sha-*` tags and untagged layers. | `registry-cleanup.yml` of repositories that publish an image |

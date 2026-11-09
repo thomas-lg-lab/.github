@@ -4,7 +4,7 @@
 #
 # Types: the Conventional Commits set of commitlint's config-conventional. A breaking change adds `!`.
 # Labels: the autolabeler rules of .github/release-drafter.yml in this repository.
-# Lint: zizmor (security of the caller's workflows) and actionlint (syntax, shellcheck), both blocking.
+# Lint: zizmor (security, Security tab + ruleset gate) and actionlint (syntax, shellcheck, annotations, blocking).
 name: PR conventions
 
 on:
@@ -46,23 +46,28 @@ jobs:
       - uses: release-drafter/release-drafter/autolabeler@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
 
   # The caller's .github/workflows/, checked out here (the github context is the caller's).
+  # zizmor in its documented Advanced Security mode: findings go to the Security tab as SARIF (the job does not
+  # fail on them); the ruleset's code_scanning rule, tool `zizmor`, blocks the merge. actionlint through its
+  # official image pinned by digest (shellcheck included), errors as GitHub annotations through its problem matcher.
   lint:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Security audit; fails on any finding (no Advanced Security upload, so the failure is the signal).
       - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
-        with:
-          advanced-security: false
-          annotations: true
-      # Syntax and semantics, shellcheck included. The one ignore: `$/` is GitHub's recommended same-repository
-      # syntax, which actionlint 1.7.12 does not parse yet.
+      # Errors become annotations through actionlint's official problem matcher (its repository's
+      # .github/actionlint-matcher.json at v1.7.12, embedded: the checkout is the caller's). The one ignore:
+      # `$/` is GitHub's recommended same-repository syntax, which actionlint 1.7.12 does not parse yet.
       - name: actionlint
         run: |
+          cat > "$RUNNER_TEMP/actionlint-matcher.json" <<'EOF'
+          {"problemMatcher": [{"owner": "actionlint", "pattern": [{"regexp": "^(?:\\x1b\\[\\d+m)?(.+?)(?:\\x1b\\[\\d+m)*:(?:\\x1b\\[\\d+m)*(\\d+)(?:\\x1b\\[\\d+m)*:(?:\\x1b\\[\\d+m)*(\\d+)(?:\\x1b\\[\\d+m)*: (?:\\x1b\\[\\d+m)*(.+?)(?:\\x1b\\[\\d+m)* \\[(.+?)\\]$", "file": 1, "line": 2, "column": 3, "message": 4, "code": 5}]}]}
+          EOF
+          echo "::add-matcher::$RUNNER_TEMP/actionlint-matcher.json"
           docker run --rm -v "$PWD:/repo" -w /repo \
             rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
             -no-color -ignore 'reusable workflow call "\$/'
