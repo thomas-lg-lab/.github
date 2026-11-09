@@ -9,6 +9,11 @@ name: PR conventions
 
 on:
   workflow_call:
+    inputs:
+      code-scanning:
+        description: Upload zizmor's findings to code scanning (needs it enabled, so a public repository or Advanced Security); false reports them as annotations instead.
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -65,6 +70,9 @@ jobs:
       # zizmor in its documented Advanced Security mode: SARIF to code scanning, attached to the commit checked
       # out above, so the rulesets' code_scanning rule finds it on the PR head.
       - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        with:
+          advanced-security: ${{ inputs.code-scanning }}
+          annotations: ${{ !inputs.code-scanning }}
       # Errors become annotations through actionlint's official problem matcher (its repository's
       # .github/actionlint-matcher.json at v1.7.12, embedded: the checkout is the caller's). The one ignore:
       # `$/` is GitHub's recommended same-repository syntax, which actionlint 1.7.12 does not parse yet.
