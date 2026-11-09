@@ -26,6 +26,10 @@ jobs:
   draft:
     if: ${{ !inputs.publish }}
     runs-on: ubuntu-latest
+    # Two quick pushes to main would race on the same draft (the caller's concurrency group is its own).
+    concurrency:
+      group: release-drafter-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write # create and update the draft release
       pull-requests: read
@@ -33,13 +37,18 @@ jobs:
       - uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
 
   publish:
-    if: ${{ inputs.publish && github.ref == 'refs/heads/main' }}
+    if: ${{ inputs.publish }}
     runs-on: ubuntu-latest
     permissions:
       contents: write # publish the release, which creates its tag
       pull-requests: read
       actions: write # dispatch the image workflow on that tag
     steps:
+      - name: Only main is released
+        if: ${{ github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::A release is published from main, not from $GITHUB_REF_NAME."
+          exit 1
       - id: drafter
         uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
         with:
