@@ -4,8 +4,8 @@
 # Merging is not releasing:
 #   - pull request: build amd64, scan, no push (and an arm64 build on an arm runner with verify-arm64)
 #   - push to main: publishes :edge and :sha-<short>
-#   - v* tag (a published release, dispatched by release-drafter.yml): publishes :X.Y.Z / :X.Y / :X, and :latest
-#     unless it is a pre-release (latest=auto). The tagged commit must be on main.
+#   - v* tag (a published release; the release App's tag push starts this workflow): publishes :X.Y.Z / :X.Y / :X,
+#     and :latest unless it is a pre-release (latest=auto). The tagged commit must be on main.
 # The image is ghcr.io/<owner>/<repo>; the Dockerfile's VERSION build argument receives the image version.
 #
 # The caller grants contents read and security-events write (Trivy report), and for publishing packages write,
