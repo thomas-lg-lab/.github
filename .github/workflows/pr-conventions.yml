@@ -55,14 +55,17 @@ jobs:
       contents: read
       security-events: write
     steps:
+      # The PR's head commit, not the test-merge commit: upload-sarif attaches results to the commit checked out,
+      # and the code_scanning rule of the rulesets looks for them on the head (CodeQL default setup does the same).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       # zizmor's SARIF goes to code scanning on the PR's HEAD commit (ref refs/pull/N/head, like CodeQL default
-      # setup), not on the test-merge commit a pull_request run checks out: the rulesets' code_scanning rule looks
-      # for results on the head or the *current* merge commit, and the merge commit changes, so an upload on it
-      # left every PR "waiting for results from zizmor". Official image, pinned by digest; any exit code with a
-      # SARIF written is a result (zizmor exits non-zero when it finds something).
+      # setup): the rulesets' code_scanning rule looks for results on the head or the *current* merge commit, and
+      # the merge commit changes, so an upload on it left every PR "waiting for results from zizmor". Official
+      # image, pinned by digest; any exit code with a SARIF written is a result (zizmor exits non-zero when it
+      # finds something).
       - name: zizmor
         run: |
           docker run --rm -v "$PWD:/repo"             ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d             --no-progress --no-online-audits --format sarif /repo > zizmor.sarif || true
