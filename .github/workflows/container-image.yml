@@ -31,6 +31,13 @@ on:
         description: On pull requests, also build the arm64 image on an arm runner (catches arm-only failures).
         type: boolean
         default: false
+      contract-test:
+        description: >-
+          Run the lab runtime contract test on the built image, before the vulnerability gate: non-root user set in
+          the image, HTTP on 8080 with an empty /data and /secrets and a read-only root filesystem, GET /healthz 200,
+          a page answers with an injected Remote-User, logs on stdout, clean stop within 10 s of SIGTERM.
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -84,6 +91,32 @@ jobs:
           build-args: VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Runs the image the way the lab cluster does (uid 10001, read-only root, /tmp as tmpfs, empty volumes).
+      - name: Runtime contract test
+        if: inputs.contract-test && steps.detect.outputs.dockerfile == 'true'
+        env:
+          IMAGE: ${{ steps.detect.outputs.image }}:${{ steps.meta.outputs.version }}
+        run: |
+          set -u
+          fail() { echo "::error title=Runtime contract::$1"; docker logs contract 2>&1 | tail -20 || true; exit 1; }
+          user=$(docker image inspect --format '{{.Config.User}}' "$IMAGE")
+          case "${user%%:*}" in ""|0|root) fail "the image sets no non-root USER (Config.User='$user')" ;; esac
+          data=$(mktemp -d) && secrets=$(mktemp -d) && chmod 0777 "$data"
+          docker run -d --name contract --user 10001:10001 --read-only --tmpfs /tmp             -v "$data:/data" -v "$secrets:/secrets:ro" -p 127.0.0.1:18080:8080 "$IMAGE" > /dev/null
+          for _ in $(seq 1 30); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/healthz)" = 200 ] && break
+            sleep 1
+          done
+          [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/healthz)" = 200 ]             || fail "GET /healthz on 8080 did not answer 200 within 30 s"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Remote-User: contract-test' http://127.0.0.1:18080/)
+          case "$code" in 2??) ;; *) fail "GET / with a Remote-User header answered $code" ;; esac
+          [ -n "$(docker logs contract 2>&1)" ] || fail "nothing logged on stdout or stderr"
+          start=$(date +%s)
+          docker stop -t 10 contract > /dev/null
+          took=$(( $(date +%s) - start ))
+          status=$(docker inspect --format '{{.State.ExitCode}}' contract)
+          [ "$status" != 137 ] && [ "$took" -lt 10 ] || fail "no clean stop on SIGTERM (exit $status after ${took} s)"
+          echo "Runtime contract: user $user, /healthz 200, / $code with Remote-User, logs on stdout, stopped in ${took} s (exit $status)."
       - name: Vulnerability report (Trivy)
         if: steps.detect.outputs.dockerfile == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
