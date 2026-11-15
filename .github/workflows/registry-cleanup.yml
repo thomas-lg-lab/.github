@@ -1,7 +1,7 @@
 # Reusable: prunes the repository's GHCR package (named after the repository). Every main push publishes a
 # sha-<short> tag and an attestation, so they pile up. sha-* younger than 30 days are kept, and the 10 newest
 # older ones; latest, edge and version tags are never touched; untagged layers go; the attestations of the images
-# kept stay.
+# kept stay. A repository with no package (a template, nothing published yet) has nothing to prune: the run passes.
 #
 # Retention contract: sha-* tags are ephemeral. Anything that must keep pulling pins :latest, a version tag or a
 # digest, never an old sha-* tag. The caller grants packages write.
@@ -23,11 +23,30 @@ jobs:
     permissions:
       packages: write
     steps:
-      - id: repo
-        run: echo "name=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
-      - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1
+      # 404 on the package means there is nothing to prune; any other error fails the run.
+      - id: package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          name="${GITHUB_REPOSITORY#*/}"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          case "$(gh api "repos/$GITHUB_REPOSITORY" --jq .owner.type)" in
+            Organization) scope=orgs ;;
+            *) scope=users ;;
+          esac
+          if out="$(gh api "$scope/$GITHUB_REPOSITORY_OWNER/packages/container/$name" --silent 2>&1)"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif grep -q "HTTP 404" <<<"$out"; then
+            echo "::notice::No container package named $name, nothing to prune."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$out"
+            exit 1
+          fi
+      - if: steps.package.outputs.exists == 'true'
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1
         with:
-          package: ${{ steps.repo.outputs.name }}
+          package: ${{ steps.package.outputs.name }}
           delete-tags: sha-*
           keep-n-tagged: 10
           exclude-tags: latest,edge
