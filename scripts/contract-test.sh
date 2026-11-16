@@ -12,7 +12,21 @@ set -eu
 : "${IMAGE:?}" "${PROTECTED_PATH:=}" "${DATABASE_PATH:=}"
 [ -z "$DATABASE_PATH" ] || : "${POSTGRES_IMAGE:?}"
 
-fail() { echo "::error title=Runtime contract::$1"; docker logs contract 2>&1 | tail -20 || true; exit 1; }
+data="" secrets=""
+# Leaves nothing behind, so a failed run does not break the next one on the same machine.
+cleanup() {
+  docker rm -f contract contract-db > /dev/null 2>&1 || true
+  docker network rm contract > /dev/null 2>&1 || true
+  [ -z "$data$secrets" ] || rm -rf "$data" "$secrets" 2> /dev/null || true
+}
+trap cleanup EXIT
+cleanup
+
+fail() {
+  echo "::error title=Runtime contract::$1"
+  if docker inspect contract > /dev/null 2>&1; then docker logs contract 2>&1 | tail -20; fi
+  exit 1
+}
 # code <path> [curl options]: the HTTP status of a GET, 000 when nothing answers.
 code() { local path=$1; shift; curl -s -o /dev/null -m 10 -w '%{http_code}' "$@" "http://127.0.0.1:18080$path" || true; }
 start_app() {
@@ -90,11 +104,12 @@ if [ -n "$DATABASE_PATH" ]; then
     -c "CREATE ROLE app LOGIN PASSWORD '$password'" -c "CREATE DATABASE app OWNER app" \
     || fail "the test's PostgreSQL did not start (not the app's fault)"
   start=$(date +%s)
-  for _ in $(seq 1 60); do
-    got=$(code "$DATABASE_PATH")
-    case "$got" in 000|5??) sleep 1 ;; *) break ;; esac
+  while got=$(code "$DATABASE_PATH"); do
+    case "$got" in 000|5??) ;; *) break ;; esac
+    [ $(( $(date +%s) - start )) -lt 60 ] \
+      || fail "GET $DATABASE_PATH still answers $got 60 s after the database came up"
+    sleep 1
   done
-  case "$got" in 000|5??) fail "GET $DATABASE_PATH still answers $got 60 s after the database came up" ;; esac
   summary="$summary; database up: $DATABASE_PATH $got after $(( $(date +%s) - start )) s"
   check_user
   stop_app
