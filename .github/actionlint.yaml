@@ -1,0 +1,6 @@
+# actionlint 1.7.12 does not know the job.workflow_* properties yet (the repository and commit of the workflow
+# file that defines the job), which container-image.yml uses to read its own script.
+paths:
+  .github/workflows/container-image.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined'
