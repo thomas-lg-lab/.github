@@ -2,5 +2,15 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": "Keeps the actions of the shared workflows current through the organisation's preset. No auto-merge: a change here reaches every repository at its next release.",
   "extends": ["github>thomas-lg-lab/renovate-config"],
-  "enabledManagers": ["github-actions"]
+  "enabledManagers": ["github-actions", "custom.regex"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Images a workflow step runs by itself, named in an env value under a `# renovate:` comment.",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\s+[A-Z_]+: \\S+?:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ]
+    }
+  ]
 }

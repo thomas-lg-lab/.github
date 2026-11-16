@@ -35,9 +35,26 @@ on:
         description: >-
           Run the lab runtime contract test on the built image, before the vulnerability gate: non-root user set in
           the image, HTTP on 8080 with an empty /data and /secrets and a read-only root filesystem, GET /healthz 200,
-          a page answers with an injected Remote-User, logs on stdout, clean stop within 10 s of SIGTERM.
+          a page answers with an injected Remote-User, logs on stdout, clean stop within 10 s of SIGTERM. The two
+          inputs below adapt it to an app with its own login or with a database.
         type: boolean
         default: false
+      contract-protected-path:
+        description: >-
+          Contract test, login variant: for an app that signs its users in itself, a path only a signed-in user may
+          read (for example /api/v1/me). It must answer 401, 403 or a redirect, without a session and with forged
+          Remote-User, Remote-Groups and Remote-Email headers alike. Replaces the page check with a Remote-User.
+        type: string
+        default: ""
+      contract-database-path:
+        description: >-
+          Contract test, database variant: for an app with a PostgreSQL database, a path that reads it (for example
+          /api/v1/config). The connection string is the file /secrets/database-url, a postgresql:// URI of a user
+          that owns its database and nothing else. /healthz must answer 200 and this path 5xx with no connection
+          string, then with an unreachable database; once the database is up the path must stop answering 5xx
+          within 60 s, the app not restarted.
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -91,32 +108,107 @@ jobs:
           build-args: VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      # Runs the image the way the lab cluster does (uid 10001, read-only root, /tmp as tmpfs, empty volumes).
+      # Runs the image the way the lab cluster does (uid 10001, read-only root, /tmp as tmpfs, empty volumes), then,
+      # for the database variant, a second time with its connection string and a PostgreSQL that comes up late.
       - name: Runtime contract test
         if: inputs.contract-test && steps.detect.outputs.dockerfile == 'true'
         env:
           IMAGE: ${{ steps.detect.outputs.image }}:${{ steps.meta.outputs.version }}
+          PROTECTED_PATH: ${{ inputs.contract-protected-path }}
+          DATABASE_PATH: ${{ inputs.contract-database-path }}
+          # PostgreSQL 18 with pgvector, as the lab's database image has it.
+          # renovate: datasource=docker depName=pgvector/pgvector
+          POSTGRES_IMAGE: pgvector/pgvector:pg18@sha256:38681dc6eaf55308e2a4c6de392d131652dcfac70e1263e35cd9b5ea3fe39782
         run: |
           set -u
           fail() { echo "::error title=Runtime contract::$1"; docker logs contract 2>&1 | tail -20 || true; exit 1; }
+          # code <path> [curl options]: the HTTP status of a GET, 000 when nothing answers.
+          code() { local path=$1; shift; curl -s -o /dev/null -m 10 -w '%{http_code}' "$@" "http://127.0.0.1:18080$path" || true; }
+          start_app() {
+            docker run -d --name contract --user 10001:10001 --read-only --tmpfs /tmp \
+              -v "$data:/data" -v "$secrets:/secrets:ro" -p 127.0.0.1:18080:8080 "$@" "$IMAGE" > /dev/null
+            for _ in $(seq 1 30); do [ "$(code /healthz)" = 200 ] && return; sleep 1; done
+            fail "GET /healthz on 8080 did not answer 200 within 30 s"
+          }
+          stop_app() {
+            [ -n "$(docker logs contract 2>&1)" ] || fail "nothing logged on stdout or stderr"
+            local start status
+            start=$(date +%s)
+            docker stop -t 10 contract > /dev/null
+            took=$(( $(date +%s) - start ))
+            status=$(docker inspect --format '{{.State.ExitCode}}' contract)
+            [ "$status" != 137 ] && [ "$took" -lt 10 ] || fail "no clean stop on SIGTERM (exit $status after ${took} s)"
+            docker rm contract > /dev/null
+          }
+          # Default: the reverse proxy's Remote-User names the user. Login variant: it must name nobody.
+          check_user() {
+            local plain forged
+            if [ -z "$PROTECTED_PATH" ]; then
+              plain=$(code / -H 'Remote-User: contract-test')
+              case "$plain" in 2??) ;; *) fail "GET / with a Remote-User header answered $plain" ;; esac
+              summary="$summary, / $plain with Remote-User"
+              return
+            fi
+            plain=$(code "$PROTECTED_PATH")
+            forged=$(code "$PROTECTED_PATH" -H 'Remote-User: contract-test' -H 'Remote-Groups: admins' \
+              -H 'Remote-Email: contract-test@example.org')
+            case "$plain" in 401|403|3??) ;; *) fail "GET $PROTECTED_PATH without a session answered $plain" ;; esac
+            case "$forged" in 401|403|3??) ;; *) fail "GET $PROTECTED_PATH with forged Remote-* headers answered $forged" ;; esac
+            summary="$summary, $PROTECTED_PATH $plain without a session and $forged with forged Remote-* headers"
+          }
+          for path in "$PROTECTED_PATH" "$DATABASE_PATH"; do
+            case "$path" in ""|/*) ;; *) fail "a contract path must start with / ('$path')" ;; esac
+          done
           user=$(docker image inspect --format '{{.Config.User}}' "$IMAGE")
           case "${user%%:*}" in ""|0|root) fail "the image sets no non-root USER (Config.User='$user')" ;; esac
-          data=$(mktemp -d) && secrets=$(mktemp -d) && chmod 0777 "$data"
-          docker run -d --name contract --user 10001:10001 --read-only --tmpfs /tmp             -v "$data:/data" -v "$secrets:/secrets:ro" -p 127.0.0.1:18080:8080 "$IMAGE" > /dev/null
-          for _ in $(seq 1 30); do
-            [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/healthz)" = 200 ] && break
-            sleep 1
-          done
-          [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/healthz)" = 200 ]             || fail "GET /healthz on 8080 did not answer 200 within 30 s"
-          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Remote-User: contract-test' http://127.0.0.1:18080/)
-          case "$code" in 2??) ;; *) fail "GET / with a Remote-User header answered $code" ;; esac
-          [ -n "$(docker logs contract 2>&1)" ] || fail "nothing logged on stdout or stderr"
-          start=$(date +%s)
-          docker stop -t 10 contract > /dev/null
-          took=$(( $(date +%s) - start ))
-          status=$(docker inspect --format '{{.State.ExitCode}}' contract)
-          [ "$status" != 137 ] && [ "$took" -lt 10 ] || fail "no clean stop on SIGTERM (exit $status after ${took} s)"
-          echo "Runtime contract: user $user, /healthz 200, / $code with Remote-User, logs on stdout, stopped in ${took} s (exit $status)."
+          summary="user $user"
+
+          # 1. Empty /data, empty /secrets.
+          data=$(mktemp -d) && secrets=$(mktemp -d) && chmod 0777 "$data" && chmod 0755 "$secrets"
+          start_app
+          summary="$summary, /healthz 200"
+          if [ -z "$DATABASE_PATH" ]; then
+            check_user
+          else
+            got=$(code "$DATABASE_PATH")
+            case "$got" in 5??) ;; *) fail "GET $DATABASE_PATH with no connection string answered $got, not 5xx" ;; esac
+          fi
+          stop_app
+          summary="$summary, logs on stdout, stopped in ${took} s"
+
+          # 2. Database variant: the connection string as the lab mounts it, the database not there yet.
+          if [ -n "$DATABASE_PATH" ]; then
+            docker network create contract > /dev/null
+            password=$(openssl rand -hex 16)
+            printf 'postgresql://app:%s@contract-db:5432/app' "$password" > "$secrets/database-url"
+            chmod 0444 "$secrets/database-url"
+            start_app --network contract
+            got=$(code "$DATABASE_PATH")
+            case "$got" in 5??) ;; *) fail "GET $DATABASE_PATH with an unreachable database answered $got, not 5xx" ;; esac
+            [ "$(code /healthz)" = 200 ] || fail "GET /healthz no longer answers 200 once the database was asked for"
+            summary="$summary; database unreachable: /healthz 200, $DATABASE_PATH $got"
+
+            # As on the lab: the app's user owns its database and is no superuser.
+            docker run -d --name contract-db --network contract -e POSTGRES_PASSWORD="$(openssl rand -hex 16)" \
+              "$POSTGRES_IMAGE" > /dev/null
+            for _ in $(seq 1 60); do
+              docker exec contract-db pg_isready -q -h 127.0.0.1 -U postgres && break
+              sleep 1
+            done
+            docker exec contract-db psql -q -v ON_ERROR_STOP=1 -U postgres \
+              -c "CREATE ROLE app LOGIN PASSWORD '$password'" -c "CREATE DATABASE app OWNER app" \
+              || fail "the test's PostgreSQL did not start (not the app's fault)"
+            start=$(date +%s)
+            for _ in $(seq 1 60); do
+              got=$(code "$DATABASE_PATH")
+              case "$got" in 000|5??) sleep 1 ;; *) break ;; esac
+            done
+            case "$got" in 000|5??) fail "GET $DATABASE_PATH still answers $got 60 s after the database came up" ;; esac
+            summary="$summary; database up: $DATABASE_PATH $got after $(( $(date +%s) - start )) s"
+            check_user
+            stop_app
+          fi
+          echo "Runtime contract: $summary."
       - name: Vulnerability report (Trivy)
         if: steps.detect.outputs.dockerfile == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
