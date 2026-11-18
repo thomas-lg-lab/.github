@@ -10,6 +10,10 @@
 #
 # The caller grants contents read and security-events write (Trivy report), and for publishing packages write,
 # id-token write and attestations write.
+#
+# With `lab-update`, a new :edge is followed at once by a Renovate run on the deployment repository (gitops-lab),
+# which bumps the image digest there and merges it: the lab runs main within minutes. The caller then passes the
+# deploy App's two secrets (`secrets: inherit`, or the two by name).
 name: Container image
 
 on:
@@ -55,6 +59,20 @@ on:
           within 60 s, the app not restarted.
         type: string
         default: ""
+      lab-update:
+        description: >-
+          After :edge is published from main, dispatch the organisation's Renovate run on the deployment repository
+          (gitops-lab) with a second pass, so the new digest is merged there without waiting for the daily run. Needs
+          the secrets DEPLOY_APP_CLIENT_ID and DEPLOY_APP_PRIVATE_KEY.
+        type: boolean
+        default: false
+    secrets:
+      DEPLOY_APP_CLIENT_ID:
+        description: Client ID of the deploy App (Actions write on renovate-config only). Only with lab-update.
+        required: false
+      DEPLOY_APP_PRIVATE_KEY:
+        description: Private key of the deploy App. Only with lab-update.
+        required: false
 
 permissions: {}
 
@@ -244,3 +262,28 @@ jobs:
           subject-name: ${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+  # main only: a release tag publishes a version the lab does not follow. The job holds no permission of its own;
+  # the deploy App's token is limited to renovate-config and to Actions write, enough to dispatch a workflow there
+  # and nothing else. Renovate does the rest with its own App (the digest bump, its checks, the merge).
+  lab-update:
+    needs: publish
+    if: ${{ inputs.lab-update && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.DEPLOY_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DEPLOY_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: renovate-config
+          permission-actions: write
+      - name: Dispatch Renovate on the deployment repository
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh workflow run renovate.yml -R "$OWNER/renovate-config" \
+            -f repositories="$OWNER/gitops-lab" -f secondPass=true
