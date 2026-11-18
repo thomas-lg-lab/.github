@@ -1,6 +1,6 @@
 # Reusable: keeps a draft GitHub Release up to date from the merged PRs (categories and version from their labels,
 # .github/release-drafter.yml in this repository), and publishes it on demand. Publishing creates the `v*` tag as
-# the organisation's release App (`thomas-lg-release`, Contents write only): the only actor the "Release tags"
+# the organisation's release App (`thomas-lg-lab-release`, Contents write only): the only actor the "Release tags"
 # ruleset lets create such a tag, and a tag it pushes starts the repository's workflows (a GITHUB_TOKEN tag would
 # not), so `ci.yml` builds the release image on its own `push: tags` trigger.
 # Called by the release-drafter.yml workflow of every repository that ships releases with `secrets: inherit` (the
