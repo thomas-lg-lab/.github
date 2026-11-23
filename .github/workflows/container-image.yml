@@ -179,7 +179,7 @@ jobs:
   # In parallel with `build`, so it detects the Dockerfile itself.
   build-arm64:
     if: ${{ inputs.verify-arm64 && github.event_name == 'pull_request' }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
     steps:
