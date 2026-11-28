@@ -23,7 +23,7 @@ jobs:
     permissions:
       pull-requests: read
     steps:
-      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
+      - uses: amannn/action-semantic-pull-request@66e72920af32222769c386d81f89656ebcb6d6d5 # v6.1.4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -48,7 +48,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: release-drafter/release-drafter/autolabeler@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
+      - uses: release-drafter/release-drafter/autolabeler@d1a19e60e81a7e650d00a7de9277f87e439117ea # v7.11.0
 
   # The caller's .github/workflows/, checked out here (the github context is the caller's).
   # zizmor in its documented Advanced Security mode: findings go to the Security tab as SARIF (the job does not
@@ -69,7 +69,7 @@ jobs:
           persist-credentials: false
       # zizmor in its documented Advanced Security mode: SARIF to code scanning, attached to the commit checked
       # out above, so the rulesets' code_scanning rule finds it on the PR head.
-      - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+      - uses: zizmorcore/zizmor-action@1b4550e929643b8b26a62303c6bd64814271a4f1 # v0.9.2
         with:
           advanced-security: ${{ inputs.code-scanning }}
           annotations: ${{ !inputs.code-scanning }}
